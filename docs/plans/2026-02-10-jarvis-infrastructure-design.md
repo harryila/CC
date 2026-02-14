@@ -4,6 +4,14 @@
 > Status: DESIGNING
 > Started: February 10, 2026
 
+### Design Review Log
+
+| Date | Reviewer | Outcome |
+|------|----------|---------|
+| 2026-02-10 | Cursor (review 1) | Validated core design. Flagged: soul loads everywhere (acceptable risk), iMessage too early (moved to Phase 2), STATUS.md staleness (resolved with regen rules), shared/ concurrent writes (hardened with one-writer rule). Identified gaps: budget tracking (added), backups (added), project CLAUDE.md template priority (acknowledged). |
+| 2026-02-10 | Cursor (review 2) | Identified design flaw: soul symlink loads jarvis-specific rules everywhere. Fix: split into `~/.claude/CLAUDE.md` (universal) + `~/jarvis/CLAUDE.md` (jarvis-specific). Also flagged: journal won't scale as flat files (split by domain), STATUS.md auto-regen too eager (make on-demand), shared/ paths couple graduated projects to jarvis (shared/ for workbench only), soul needs size budget (~100 lines), idea template needs progressive sections by status. |
+| 2026-02-10 | ChatGPT + OpenClaw | 9 items reviewed. Added: Cerebro inspiration (soul as constitution, permission to disagree, anti-filler), three-library structure (ideas/journal/memory), daily memory notes with session init, explicit model routing table, journal grouping logic, heartbeat via local LLM for Phase 2, rate limit guardrails as TODO, reference files for soul overflow. Soul identity section needs Harry's personal values (TODO). |
+
 ---
 
 ## Design Decisions Log
@@ -13,15 +21,26 @@
 | Project location | **Hybrid** — small experiments in `~/jarvis/workbench/`, serious projects get their own location (e.g., `~/projects/`) | Keeps jarvis from becoming a junk drawer, but small stuff doesn't need top-level dirs |
 | Git strategy | **Jarvis root is a repo, workbenches are gitignored** — each workbench/project has its own git repo | Ideas/docs are versioned together; project code doesn't pollute jarvis history |
 | Project linking | **Path in idea file** — the idea file's `workbench:` field stores the path to the project wherever it lives | Single source of truth, no symlinks to maintain |
-| Soul scope | **Global** — `~/jarvis/soul.md` symlinked to `~/.claude/CLAUDE.md`, applies to every Claude session | Consistency everywhere; Claude always feels like "your" Claude |
+| Soul scope | **Split** — `~/.claude/CLAUDE.md` has universal principles (style, TDD, plan-before-code). `~/jarvis/CLAUDE.md` has jarvis-specific workflows (ideas, STATUS, journal, shared). Claude Code natively loads both when in jarvis. | Jarvis rules don't bleed into non-jarvis sessions. Universal principles apply everywhere. |
 | Non-software ideas | **Same structure, all markdown** — every active idea gets a workbench with CLAUDE.md, even if it's just docs. 99% will involve code anyway | Consistent pattern; don't overthink categories |
 | Inter-project data | **Shared data layer** — projects can produce/consume data through a convention (`~/jarvis/shared/` or API patterns) | Projects aren't fully isolated; one project's output can feed another |
 | Idea creation | **Conversational** — Harry talks, Claude creates the file. Two modes: quick dump (2-3 questions) or full brainstorm. Harry picks in the moment. | Never write markdown by hand; the whole point of Claude is to do the structuring |
 | Workflow codification | **Soul now, skills later** — soul describes behaviors in plain language. Extract into formal skills only when a pattern becomes repetitive enough to warrant it | No premature infrastructure; skills are overhead until proven necessary |
 | Idea capture location | **Anywhere** — any Claude session can create idea files in `~/jarvis/ideas/` regardless of current directory. Plus iMessage/phone for mobile capture. | Zero friction; never lose an idea because you're in the wrong terminal or away from computer |
 | Cross-project intelligence | **Active dot-connecting** — Claude doesn't just organize, it proactively sees connections between projects/ideas and proposes them. STATUS.md + group field + Claude initiative. | Claude should be a thinking partner, not just a filing system |
-| Engineering memory | **Journal** — `~/jarvis/journal/patterns.md` (what worked) and `antipatterns.md` (what failed and why). Referenced before decisions, updated after learnings. | Accumulate knowledge across all projects; avoid repeating mistakes; reuse winning patterns |
+| Engineering memory | **Journal directory** — starts with `patterns.md` + `antipatterns.md`, splits by domain (e.g., `scraping.md`, `api-design.md`) when a file hits ~100 lines. Claude reads only relevant files. | Accumulate knowledge across all projects; avoid repeating mistakes; scales without becoming unreadable |
+| Shared data scope | **Workbench-only** — `shared/` is for workbench-to-workbench communication. Graduated projects in `~/projects/` must be self-contained for data ingestion (configurable paths, env vars, or own data dirs). | Prevents cross-directory coupling; graduated projects aren't fragile if jarvis moves |
+| Soul size budget | **~100 lines max per file** — when `~/.claude/CLAUDE.md` or `~/jarvis/CLAUDE.md` grows past ~100 lines, extract detailed rules into reference files that Claude loads on-demand | Prevents soul from eating excessive context in every session |
+| STATUS.md regeneration | **On-demand, not automatic** — Claude suggests regenerating during triage, or Harry asks. Auto-regen only when Claude is already modifying idea files (marginal cost). Not on every session start. | Avoids 15-30s latency penalty at session start as the system scales |
+| Idea template growth | **Progressive sections** — seed template is minimal. As status progresses to exploring/ready, Claude adds architecture, tech stack, MVP scope sections through conversation. | Template matches idea maturity; don't front-load structure on half-formed thoughts |
 | Context management | **Soul-driven** — soul tells Claude when/how to compress context, but ALWAYS ask before clearing | Optimize token usage without losing information Harry hasn't approved losing |
+| Cerebro inspiration | **Cherry-pick ideas, not the system** — soul as constitution (values + personality), permission to disagree, anti-filler rules. Don't copy: Mac Mini infra, 47 agents, 8 MCP servers. Reference for Phase 2 only. | Cerebro validated the "soul = identity + principles" approach. Take the design philosophy, build our own implementation. |
+| Soul identity structure | **Two halves per soul file** — identity (who Harry is, values, personality) + operating principles (how Claude should work). Cerebro's "four values" pattern is worth adopting. | Soul should feel like a person's constitution, not a system prompt. Identity half rarely changes; principles half evolves with usage. |
+| Daily memory notes | **`memory/` directory** — daily notes (`YYYY-MM-DD.md`) written at session end, read at session start (today + yesterday). Lives alongside STATUS.md. | Three libraries: `ideas/` (what to build), `journal/` (what we've learned), `memory/` (what's happening now). Daily memory bridges sessions without bloating the soul. |
+| Three-library structure | **ideas/ + journal/ + memory/** — three distinct libraries with different purposes and lifecycles | Ideas = future (what to build). Journal = permanent (what we've learned). Memory = ephemeral (what's happening now, rolling window). |
+| Model routing | **Explicit table in soul** — Haiku for status/formatting/simple, Sonnet for most coding/debugging/research, Opus for architecture/complex/cross-project. Default: try cheaper first. | Prevents defaulting to Opus for everything. Makes cost-consciousness a first-class rule, not a suggestion. |
+| Session initialization | **Read daily memory on jarvis session start** — on startup in jarvis, read today's + yesterday's memory notes to restore context | Cheap way to maintain continuity without loading full conversation history |
+| Journal grouping logic | **Check-before-create + hierarchical splitting** — before creating a new domain file, check if an existing group covers it. Split groups further when they get long. | Prevents proliferation of tiny files. Groups stay coherent through explicit hierarchy. |
 | Project graduation | **TODO** — come back to this. Process for moving projects from workbench/ to ~/projects/ is undefined. | Need more thought on what actually happens during graduation |
 | Project CLAUDE.md template | **TODO** — draft exists but needs deeper brainstorming on what it should include and look like | Don't finalize yet; come back for dedicated design session |
 
@@ -37,9 +56,9 @@ Build a personal "Jarvis" system around Claude Code that manages 10-25+ ideas ac
 
 ### Approach
 
-**Phase 1 (The Workshop):** Ideas library + isolated workbenches + soul CLAUDE.md + Cursor integration + shared data conventions. Get productive immediately.
+**Phase 1 (The Workshop):** Ideas library + isolated workbenches + soul CLAUDE.md + Cursor integration + shared data conventions + engineering journal. Get productive immediately.
 
-**Phase 2 (The Studio):** Add orchestration, scheduling, background routines, and multi-project coordination on top of the Workshop foundation.
+**Phase 2 (The Studio):** Add orchestration, scheduling, background routines, multi-project coordination, iMessage integration, and advanced pipeline management on top of the Workshop foundation.
 
 ### Principles
 
@@ -50,6 +69,24 @@ Build a personal "Jarvis" system around Claude Code that manages 10-25+ ideas ac
 - **Cursor is the cockpit** — When Harry needs to go hands-on (edit files, review diffs, inspect visually), Cursor is the interface. Claude Code is the engine underneath.
 - **Projects can talk** — Projects aren't fully siloed. When one project produces data another needs, there's a clean convention for sharing it.
 
+### Cerebro Inspiration
+
+The Cerebro project (Mac Mini running 47 specialized Claude agents with 8 MCP servers) validated several ideas worth stealing, and clarified what NOT to copy.
+
+**Worth stealing:**
+- **Soul as constitution, not system prompt** — The soul should read like a person's identity document: values, personality, principles. Not a list of instructions. Cerebro's "four values" pattern (curiosity, craftsmanship, honesty, pragmatism) gives the AI a character to inhabit, not just rules to follow.
+- **Permission to disagree** — Claude should push back when it thinks Harry is making a mistake. The soul explicitly grants this. "If you think I'm wrong, say so."
+- **Anti-filler rules** — Soul explicitly says: no fluff, no padding, no performative agreement. If something doesn't add value, don't say it.
+- **Identity + operating principles** — Each soul file has two halves: identity (who Harry is, what he values — rarely changes) and operating principles (how Claude should work — evolves with usage). This mirrors Cerebro's split but without their infrastructure complexity.
+
+**Not worth copying (but reference for Phase 2):**
+- Mac Mini infrastructure with 47 agents — overkill for Phase 1, but the concept of specialized agents doing specific jobs is sound
+- 8 MCP servers — we have 3 and that's sufficient to start
+- Complex agent routing — oh-my-claudecode handles this in Phase 3
+- The sheer scale — start with 2-3 terminals, not 47 agents
+
+**TODO:** Harry needs to deeply think through his personal values and identity for the soul's identity half. This isn't something Claude can write for you — it needs to come from genuine self-reflection. The Cerebro "four values" pattern is a good template: pick 3-5 values that genuinely describe how you think and work.
+
 ---
 
 ## Phase 1: The Workshop
@@ -57,14 +94,20 @@ Build a personal "Jarvis" system around Claude Code that manages 10-25+ ideas ac
 ### Directory Structure
 
 ```
+~/.claude/
+├── CLAUDE.md                            ← THE SOUL (universal half)
+│                                           Identity + operating principles. Loads in EVERY Claude session.
+│                                           ~50-100 lines max.
+
 ~/jarvis/                                ← The hub (its own git repo)
-├── .git/                                ← Tracks ideas, docs, soul, shared — NOT workbenches
+├── .git/                                ← Tracks ideas, docs, shared — NOT workbenches
 ├── .gitignore                           ← Ignores workbench/*/
-├── soul.md                              ← The "soul" — symlinked to ~/.claude/CLAUDE.md
+├── CLAUDE.md                            ← THE SOUL (jarvis half)
+│                                           Jarvis-specific workflows. Only loads inside ~/jarvis/.
+│                                           ~50-100 lines max.
 ├── IDEAS.md                             ← Quick-capture scratchpad (dump ideas fast)
-├── STATUS.md                            ← Auto-generated dashboard (all projects, data flows, groups)
 │
-├── ideas/                               ← The library — one file per idea
+├── ideas/                               ← LIBRARY 1: What to build — one file per idea
 │   ├── _template.md                     ← Template for new idea files
 │   ├── leetcode-for-ai.md
 │   ├── reddit-scraper-digest.md
@@ -72,9 +115,15 @@ Build a personal "Jarvis" system around Claude Code that manages 10-25+ ideas ac
 │   ├── learn-rust-by-building.md
 │   └── ...
 │
-├── journal/                             ← Engineering memory — persists across all projects
+├── journal/                             ← LIBRARY 2: What we've learned — persists forever
 │   ├── patterns.md                      ← What worked: reusable code, good decisions, winning approaches
 │   └── antipatterns.md                  ← What failed: approaches that broke, libraries that caused issues, traps
+│
+├── memory/                              ← LIBRARY 3: What's happening now — rolling window
+│   ├── STATUS.md                        ← On-demand dashboard (all projects, data flows, groups)
+│   ├── 2026-02-10.md                    ← Daily memory note (auto-written at session end)
+│   ├── 2026-02-11.md                    ← Read today + yesterday on session start
+│   └── ...
 │
 ├── workbench/                           ← Small/experimental projects (each has own .git)
 │   ├── reddit-scraper/
@@ -97,8 +146,11 @@ Build a personal "Jarvis" system around Claude Code that manages 10-25+ ideas ac
 │   │   └── _meta.json
 │   └── ...
 │
-└── docs/
-    └── plans/                           ← Design docs like this one
+├── docs/
+│   ├── plans/                           ← Design docs like this one
+│   └── ref/                             ← Reference files (detailed rules extracted from soul)
+│
+└── (when soul files grow past ~100 lines, details get extracted into docs/ref/)
 ```
 
 **Serious projects live outside jarvis:**
@@ -189,12 +241,16 @@ analytics-dashboard (consumer)
 ```
 
 **Conventions:**
+- **One writer per shared folder** — only one project writes to `shared/reddit-data/`. If two projects need to write similar data, they get separate folders. This prevents concurrent write conflicts, data corruption, and ambiguous ownership. This is a hard rule, not a suggestion.
 - The producing project's CLAUDE.md documents what it writes and the schema
 - The consuming project's CLAUDE.md documents what it reads and from where
 - The idea file for each project lists its `produces:` and `consumes:` dependencies
+- Every shared folder has a `_meta.json` with `producer`, `last_updated`, `schema_version`, and `record_count`
 - `shared/README.md` is the master reference of all data flows
 
-**Why not APIs?** In Phase 1, file-based sharing is simpler — no servers to run, no ports to manage. In Phase 2, projects that need real-time communication can graduate to actual APIs, but the `shared/` convention covers 90% of cases.
+**Scope: workbench projects only.** `shared/` is for communication between projects inside `~/jarvis/workbench/`. When a project graduates to `~/projects/`, it must become self-contained — it should own its data ingestion (configurable paths via env vars, its own data directory, or an API). This prevents graduated projects from having a hard dependency on `~/jarvis/` existing at a specific path. Part of the graduation process is decoupling from `shared/`.
+
+**Why not APIs?** In Phase 1, file-based sharing is simpler — no servers to run, no ports to manage. In Phase 2, projects that need real-time communication can graduate to actual APIs, but the `shared/` convention covers 90% of workbench cases.
 
 ### Idea Capture From Anywhere
 
@@ -206,27 +262,27 @@ You're working in `~/projects/finance-dashboard/` and have an idea. Say "new ide
 **2. Quick text file (already designed):**
 Open `~/jarvis/IDEAS.md` in any editor, dump a one-liner. Triage later.
 
-**3. iMessage / Phone (Phase 1.5):**
+**3. iMessage / Phone (Phase 2):**
 Text or call Jarvis from your phone. Use cases:
 - Walking and have an idea → text Jarvis a one-liner → it gets added to IDEAS.md or becomes a seed idea file
 - Waiting somewhere → text "what's the status of the reddit scraper?" → get a summary back
 - On a call and hear something relevant → text "look into X for the outreach project" → gets captured
 
-**Implementation approach (design later, but the pieces):**
+**Implementation approach (design in Phase 2):**
 - Apple Shortcuts automation that watches for messages to a specific contact ("Jarvis")
 - Shortcut triggers a script on your Mac (via SSH, or local if Mac is awake)
 - Script runs Claude in headless mode (`claude --print` or similar) with the message as input
 - Claude reads the jarvis system, processes the request, writes the result
 - Response sent back via iMessage through Shortcuts
 
-This is a Phase 1.5 feature — design and build it after the core Workshop is working but before Phase 2 orchestration. It's high-value because ideas happen everywhere.
+This is a Phase 2 feature. Terminal + IDEAS.md covers 90% of idea capture. iMessage is high-value but it's a rabbit hole to build — don't let it distract from getting the core Workshop running. Build it when you're actually feeling the pain of not having it.
 
 ### Cross-Project Intelligence
 
 Claude isn't just a filing system — it's a thinking partner that actively connects dots across the entire jarvis ecosystem.
 
 **STATUS.md — The Big Picture:**
-Auto-generated file at `~/jarvis/STATUS.md` that gives Claude (and Harry) a snapshot of everything:
+Auto-generated file at `~/jarvis/memory/STATUS.md` that gives Claude (and Harry) a snapshot of everything:
 
 ```markdown
 # Jarvis Status
@@ -318,77 +374,180 @@ Claude's accumulated knowledge across all projects. Two files that grow over tim
 - Reference specific entries when making recommendations: "Based on what we learned on 2/13, let's use httpx instead of Selenium"
 - Cross-project learning: a pattern proven in project A gets recommended for project B
 
-### The Soul (`soul.md`)
+**How journal files split and group (the grouping logic):**
 
-Lives at `~/jarvis/soul.md` and gets symlinked to `~/.claude/CLAUDE.md`. Loaded into every Claude Code session everywhere. Contains operating principles, workflow preferences, and tells Claude how to behave across all projects.
+Files start flat (`patterns.md`, `antipatterns.md`) with `## Domain` headers inside them. When a file hits ~100 lines, domains get extracted into their own files. The logic:
 
-**Draft contents:**
+1. **Before adding a new entry**, check existing headers/files for a group that covers it. "API rate limiting" goes under `## API Design`, not a new `## Rate Limiting` section.
+2. **When a file hits ~100 lines**, extract the largest domain section into its own file (e.g., `## Scraping` entries in `patterns.md` → `scraping-patterns.md`). The parent file gets a one-line reference: `See scraping-patterns.md for scraping patterns.`
+3. **Domain files can split further** — if `scraping-patterns.md` hits ~100 lines and has clear sub-domains (Reddit vs generic web vs API scraping), split those into subsections or sub-files.
+4. **Hierarchy stays shallow** — max two levels deep. `patterns.md` → `scraping-patterns.md` → stop. If a sub-file gets long, reorganize rather than nest deeper.
+5. **Antipatterns follow the same pattern** — `antipatterns.md` → `scraping-antipatterns.md` when it gets long.
+
+The goal: Claude should always know where to look without reading everything, and never create a new file when an existing one already covers the topic.
+
+### Daily Memory (`memory/`)
+
+The third library — ephemeral context that bridges sessions without bloating the soul.
+
+**What lives here:**
+- `STATUS.md` — the on-demand dashboard (moved here from jarvis root; it's context, not a permanent artifact)
+- `YYYY-MM-DD.md` — daily memory notes, one per day
+
+**Daily memory notes — what they contain:**
+```markdown
+# 2026-02-15
+
+## What happened today
+- Finished reddit-scraper auth flow, all tests passing
+- Brainstormed outreach-platform idea, promoted to exploring
+- Hit rate limit around 3pm, switched Terminal 2 to Sonnet
+
+## Decisions made
+- Using httpx over requests for scraping (added to journal)
+- Reddit scraper will output to shared/reddit-data/ in JSON
+
+## Open threads
+- finance-dashboard blocked on Plaid API key (waiting on approval)
+- Outreach idea needs competitor research before promoting to ready
+
+## Tomorrow
+- Triage IDEAS.md (3 items waiting)
+- Continue outreach-platform brainstorm
+- Check if Plaid API key came through
+```
+
+**When they're written:**
+- At the end of a jarvis session, Claude writes/updates today's note. Not a full transcript — a concise summary of what happened, what was decided, what's still open.
+- Claude proposes the content; Harry approves before it's saved.
+
+**When they're read:**
+- On jarvis session start, Claude reads today's note (if it exists) + yesterday's note. This gives continuity without loading full conversation history.
+- Two days is enough context. Older notes are there if you need them, but not auto-loaded.
+
+**Lifecycle:**
+- Daily notes accumulate but are low-cost (each is ~20-40 lines).
+- Periodically archive old notes (30+ days) to a `memory/archive/` folder if the directory gets cluttered.
+- Important decisions from daily notes should also land in the journal (permanent knowledge) — the daily note is the scratch pad, the journal is the textbook.
+
+**How this differs from STATUS.md:**
+- STATUS.md = state of all projects right now (what's active, what's blocked, data flows)
+- Daily notes = narrative of what happened today (decisions, progress, open threads)
+- STATUS.md is regenerated from scratch; daily notes are append-only within the day
+
+### The Soul — Two Files
+
+The soul is split into two files that serve different scopes:
+
+#### `~/.claude/CLAUDE.md` — Universal Principles (~50-100 lines max)
+
+Loads in **every** Claude Code session. Contains only things that are always true, regardless of context. No jarvis-specific references.
 
 ```markdown
-# Soul
+# CLAUDE.md
 
-## Who I Am
-- Builder, experimenter, learning fast
-- Ideas-first thinker — quantity of exploration matters
+## Identity — Who Harry Is
+- Builder and experimenter — learns by making things, not reading about them
+- Ideas-first thinker — quantity of exploration matters more than premature polish
 - Prefers seeing things work over perfect architecture
+- Values: [TODO — Harry needs to define 3-5 personal values through self-reflection.
+  Use Cerebro's "four values" pattern as a template. These should genuinely describe
+  how you think and work, not aspirational platitudes.]
 
-## How Claude Operates
+## Operating Principles — How Claude Works
+
+### Decision-Making
 - Always plan before coding (use superpowers)
 - Always verify before claiming done
 - When unsure, ask — don't guess
 - Keep things simple until complexity is earned
 - Use TDD for anything that ships; skip for experiments
-- Before technical decisions, check ~/jarvis/journal/ for relevant patterns or warnings
-- After learning something (good or bad), add it to the journal
+- If you think I'm wrong, say so. You have permission to disagree and push back.
 
-## Workflow Rules
-- New session in ~/jarvis/? Check IDEAS.md for anything to triage
-- Working on a workbench? Read its CLAUDE.md first
-- Finishing something? Update the idea file's status and last_touched
-- Creating a new project? Use the workbench scaffold pattern
-- Harry says "new idea"? Ask: quick dump or brainstorm? Then create the idea file — works from ANY directory
-- Harry wants to revisit an idea? Read the existing file, pick up where we left off
-- Never make Harry write markdown by hand — that's Claude's job
-- Regenerate ~/jarvis/STATUS.md whenever idea files or project state changes
+### Model Routing
+- **Haiku**: status checks, formatting, simple file generation, quick questions
+- **Sonnet**: most coding, debugging, research, standard implementation (DEFAULT)
+- **Opus**: architecture, complex multi-file reasoning, cross-project analysis, design sessions
+- Try cheaper first. Only escalate when the task genuinely needs deeper reasoning.
 
-## Context Management
-- When context is getting long and the important info is captured in files, suggest compacting
-- ALWAYS ask Harry before clearing or compacting — never auto-clear
-- After creating or updating an idea file, the conversation about it CAN be cleared — the file IS the memory
-- Use Haiku/Sonnet for lightweight tasks (status checks, triage), Opus for deep work
+### Context Management
+- When context is getting long and important info is captured in files, suggest compacting
+- ALWAYS ask before clearing or compacting — never auto-clear
+- The file IS the memory — once something is written to disk, the conversation is disposable
+- When approaching rate limits, say so and suggest switching models or pausing
 
-## Cross-Project Thinking
-- Glance at ~/jarvis/STATUS.md before deep work to understand the bigger picture
-- Actively look for connections between projects — shared patterns, reusable data, common pain points
-- When working on project A, consider if the approach/data/pattern could benefit project B
-- When brainstorming a new idea, check if existing projects already solve part of it
-- Always propose connections as suggestions — "I noticed X, would it make sense to Y?" — never just do it
-
-## Soul Evolution
-- If you notice a pattern in how Harry works that isn't captured here, propose adding it
-- Don't edit the soul silently — suggest the change and explain why
-- The soul is a living document that grows through conversation
-
-## Communication Style
-- Be direct, skip fluff
+### Communication
+- Be direct. No fluff, no filler, no performative agreement.
 - When presenting options, lead with your recommendation
 - Don't over-explain things I already know
 - Flag risks early, don't bury them
+- Don't pad responses to seem thorough. Short and right beats long and padded.
 
-## The Jarvis System
-- Ideas live in ~/jarvis/ideas/
-- Active projects live in ~/jarvis/workbench/ (small) or ~/projects/ (serious)
-- Inter-project data flows through ~/jarvis/shared/
-- Engineering knowledge lives in ~/jarvis/journal/ (patterns.md + antipatterns.md)
-- Every project has a corresponding idea file — always keep them in sync
-- STATUS.md is the big picture — all projects, groups, data flows, connections
+### Soul Evolution
+- If you notice a pattern in how Harry works that isn't captured here, propose adding it
+- Don't edit silently — suggest the change and explain why
+- This file must stay under ~100 lines. Extract details into reference files in the project's docs/ref/.
 ```
 
-(Draft — refine after a week of real usage.)
+#### `~/jarvis/CLAUDE.md` — Jarvis System (~50-100 lines max)
+
+Loads **only** when Claude is running inside `~/jarvis/` or its subdirectories. Contains all jarvis-specific workflows.
+
+```markdown
+# Jarvis System
+
+## Three Libraries
+- ideas/ — what to build (one file per idea, created through conversation)
+- journal/ — what we've learned (patterns + antipatterns, split by domain when long)
+- memory/ — what's happening now (STATUS.md + daily notes)
+
+## The System
+- Active projects live in ~/jarvis/workbench/ (small) or ~/projects/ (serious)
+- Workbench-to-workbench data flows through ~/jarvis/shared/ (one writer per folder)
+- Every project has a corresponding idea file — always keep them in sync
+
+## Session Initialization
+- On jarvis session start: read memory/today.md + memory/yesterday.md (if they exist)
+- This restores context from previous sessions without loading full conversation history
+- If neither exists, that's fine — start fresh
+
+## Idea Workflow
+- Harry says "new idea"? Ask: quick dump or brainstorm? Then create the idea file
+- Harry wants to revisit an idea? Read the existing file, pick up where we left off
+- Never make Harry write markdown by hand — that's Claude's job
+- Ideas grow progressively: seed (minimal) → exploring (add research) → ready (add architecture, tech stack, MVP scope)
+
+## Session Workflow
+- Triage session? Offer to regenerate memory/STATUS.md, check IDEAS.md for anything to triage
+- Working on a workbench? Read its CLAUDE.md first
+- Finishing something? Update the idea file's status and last_touched, push if there's a remote
+- Ending a session? Write/update memory/YYYY-MM-DD.md — summarize what happened, decisions made, open threads. Propose content, wait for approval.
+- Scaffolding a new workbench? Create git repo, offer to create a GitHub remote (default yes)
+- Never let a workbench exist without a remote for more than a week — remind Harry
+
+## Cross-Project Thinking
+- Before deep work, offer to check memory/STATUS.md to understand the bigger picture
+- Actively look for connections between projects — shared patterns, reusable data, common pain points
+- When working on project A, consider if the approach/data/pattern could benefit project B
+- Always propose connections as suggestions — never just do it
+
+## Engineering Journal
+- Before technical decisions, check relevant journal files for patterns or warnings
+- After learning something (good or bad), add it to the appropriate journal file
+- Before creating a new domain file, check if an existing group already covers the topic
+- Split by domain (scraping.md, api-design.md, etc.) when a file hits ~100 lines
+- This file must stay under ~100 lines. Extract details into docs/ref/ if needed.
+```
+
+(Both drafts — refine after a week of real usage.)
 
 ---
 
-## Idea File Template
+## Idea File — Progressive Template
+
+Idea files grow with the idea. Claude adds sections through conversation as the status progresses.
+
+### Seed (quick dump — the starting point)
 
 ```markdown
 ---
@@ -398,6 +557,7 @@ category: [software | experiment | automation | content | business | learning]
 created: YYYY-MM-DD
 last_touched: YYYY-MM-DD
 priority: [high | medium | low | someday]
+group: null
 workbench: null
 produces: []
 consumes: []
@@ -411,15 +571,54 @@ consumes: []
 ## Why
 [Why does this matter to you? What problem does it solve?]
 
-## Success Looks Like
-[How would you know this worked?]
-
 ## Notes
 [Anything else — links, inspirations, constraints, open questions]
 ```
 
+### Exploring (added during brainstorm / research)
+
+Claude adds these sections when the idea moves to `exploring`:
+
+```markdown
+## Success Looks Like
+[How would you know this worked?]
+
+## Research
+[What we've learned so far — links, findings, competitive landscape]
+
+## Open Questions
+[Things we still need to figure out before building]
+```
+
+### Ready (added when the idea is designed enough to build)
+
+Claude adds these sections when promoting to `ready`:
+
+```markdown
+## Architecture
+[High-level approach — what components, how they connect]
+
+## Tech Stack
+[Languages, frameworks, services, APIs]
+
+## MVP Scope
+[What's the smallest version that delivers value? What's explicitly NOT in v1?]
+
+## Risks
+[What could go wrong? What are we unsure about?]
+```
+
+### Active (added when workbench is created)
+
+```markdown
+## Workbench
+[Path to the project directory]
+[Link to GitHub remote if it exists]
+```
+
 **Field notes:**
 - `workbench:` starts as `null`, becomes `workbench/project-name` or `~/projects/project-name` when activated
+- `group:` optional tag for related ideas (e.g., `"lead-gen-pipeline"`)
 - `produces:` list of `shared/` folders this project writes to (e.g., `["reddit-data"]`)
 - `consumes:` list of `shared/` folders this project reads from (e.g., `["reddit-data", "scraped-leads"]`)
 
@@ -496,6 +695,32 @@ All terminals share your subscription quota. Strategy:
 - **Terminal 1 (triage/light):** Use Haiku or Sonnet — cheap, fast, good for status checks
 - **Terminal 2-3 (deep work):** Use Opus — complex reasoning, architecture, multi-file changes
 - Check `/usage` periodically
+- When approaching limits, Claude should proactively say so and suggest switching to a lighter model or pausing one terminal
+
+### Budget Awareness
+
+Running multiple Opus terminals burns through Claude Pro limits fast. The soul should include cost-consciousness:
+- **Default to Sonnet** unless the task genuinely needs Opus-level reasoning (architecture, complex debugging, multi-file refactors)
+- **Haiku for throwaway work** — quick checks, formatting, simple file generation
+- **Opus for the hard stuff** — planning, system design, complex code generation, cross-project reasoning
+- **Track daily spend** — run `/usage` at the start and end of each day. If you're consistently hitting limits, it means too many terminals are running Opus simultaneously.
+- In Phase 2, add a cost log to `~/jarvis/logs/` so spending is tracked over time.
+
+### Backups
+
+Workbenches that haven't been pushed to a remote can be lost (disk failure, accidental deletion). Strategy:
+- **When Claude scaffolds a new workbench**, it creates a git repo and offers to create a GitHub remote (private repo). This is the default — opt out, not opt in.
+- **The soul includes a reminder**: when finishing a work session, push if there's a remote.
+- In Phase 2, add a weekly routine that checks all workbenches for unpushed commits and flags them.
+
+### STATUS.md — Keeping It Fresh
+
+`memory/STATUS.md` is a dashboard, not a live feed. It's regenerated on-demand, not automatically:
+- **During triage**: When you start a triage session in `~/jarvis/`, Claude offers to regenerate STATUS.md. You can say yes or skip it.
+- **When already touching idea files**: If Claude is creating/updating an idea file anyway, it regenerates STATUS.md as a side effect (marginal cost since it's already reading the files).
+- **On explicit request**: "Update status" or "what's the state of everything" triggers regeneration.
+- **NOT on every session start**: With 20+ idea files and 10 workbenches, auto-regen adds 15-30s latency. Not worth it for sessions where you're just doing focused work.
+- **Cost at scale**: Reading frontmatter from all idea files + checking git status on workbenches. Fast with 5 projects, slow with 20. On-demand keeps this from becoming a tax on every session.
 
 ---
 
@@ -574,6 +799,34 @@ When you have 5+ active workbenches, add oh-my-claudecode for:
 - Coordinated multi-agent execution
 - Pipeline orchestration across multiple Claude instances
 
+### Heartbeat / Scheduled Agent Check-ins
+
+Use a **local LLM** (Ollama, llama.cpp, or similar) as the scheduler/heartbeat — NOT Claude API. The local model's job is lightweight:
+- Wake up on schedule (cron, launchd, or similar)
+- Check: does any routine need to run? Are any workbenches stale? Is STATUS.md outdated?
+- If work is needed: spin up a Claude Code instance (`claude --print` or headless mode) with the specific task
+- If no work needed: log "heartbeat: nothing to do" and go back to sleep
+
+**Why local LLM, not Claude API for scheduling:**
+- Zero token cost for heartbeats that find nothing to do (90% of checks)
+- No rate limit consumption for routine checks
+- Local model is fast enough for "should I wake Claude up?" decisions
+- Claude API is reserved for actual work, not scheduling logic
+
+**Implementation (design when Phase 2 starts):**
+- A small script with a local model that runs every N hours
+- Checks a `routines/` manifest for what should run and when
+- Launches Claude Code instances for actual work
+- Logs all activity to `logs/`
+
+### Rate Limit Guardrails
+
+**TODO — needs real usage data to finalize, but current thinking:**
+- Don't let Claude go on long autonomous loops without check-ins. If a task runs 20+ tool calls without human feedback, pause and summarize progress.
+- Daily budget awareness: run `/usage` at start and end of each day. Track trends.
+- When multiple terminals are running Opus, proactively suggest downgrading one to Sonnet.
+- Phase 2: formalize into a daily token budget with logging.
+
 ### Triggers for Moving to Phase 2
 
 You'll know it's time when:
@@ -589,21 +842,46 @@ You'll know it's time when:
 
 Items flagged for future design sessions:
 
-- [ ] **Project CLAUDE.md template** — Draft exists conceptually but needs dedicated brainstorming on what it should include, look like, and how it connects back to the jarvis system. Do NOT finalize until this session happens.
-- [ ] **Project graduation process** — How does a project move from `workbench/` to `~/projects/`? What happens to git history, shared data paths, idea file references? Needs more thought — no solution chosen yet.
-- [ ] **iMessage integration design** — The concept is defined (Apple Shortcuts → script → Claude headless → respond via iMessage) but the actual implementation needs a dedicated design session.
-- [ ] **Soul refinement** — Current draft is a starting point. Refine after 1 week of real usage based on observed patterns.
-- [ ] **STATUS.md generation** — How/when does it get regenerated? On every session start? On demand? As a hook? Needs decision.
+- [ ] **Harry's personal values for soul** — The identity half of the soul needs 3-5 genuine personal values (Cerebro's "four values" pattern). This requires real self-reflection, not Claude writing it. Use the template in the soul draft and replace the TODO block.
+- [ ] **Project CLAUDE.md template** — Draft exists conceptually but needs dedicated brainstorming on what it should include, look like, and how it connects back to the jarvis system. Do NOT finalize until this session happens. This is high priority — it's what makes each project "jarvis-aware."
+- [ ] **Project graduation process** — How does a project move from `workbench/` to `~/projects/`? What happens to git history? How does it decouple from `shared/`? How do data paths become configurable? Needs dedicated design session.
+- [ ] **Rate limit guardrails** — Need real usage data before finalizing. Current thinking: 20+ tool call pause rule, daily `/usage` tracking, proactive model downgrade suggestions. Formalize after 1-2 weeks of real multi-terminal usage.
+- [ ] **Soul refinement** — Current drafts are starting points. Refine both files after 1 week of real usage based on observed patterns.
+
+### Resolved
+
+- [x] **Soul symlink flaw** — Fixed: split into `~/.claude/CLAUDE.md` (universal, ~100 lines max) + `~/jarvis/CLAUDE.md` (jarvis-specific, ~100 lines max). Jarvis rules only load in jarvis context. Caught by Cursor review 2.
+- [x] **Journal scalability** — Fixed: start with flat files, split by domain when a file hits ~100 lines. Directory structure supports this from day one. Claude reads only relevant files.
+- [x] **STATUS.md regeneration** — Fixed: on-demand, not automatic. Claude offers during triage, auto-regens only when already modifying idea files. Avoids latency tax.
+- [x] **Shared data coupling** — Fixed: `shared/` is workbench-only. Graduated projects must be self-contained. Decoupling from shared/ is part of graduation.
+- [x] **Soul size budget** — Fixed: ~100 lines max per file. Extract details into reference files when growing.
+- [x] **Idea template growth** — Fixed: progressive sections that grow with status (seed → exploring → ready → active).
+- [x] **iMessage integration** — Moved to Phase 2. Terminal + IDEAS.md covers 90% of capture needs.
+- [x] **Budget tracking** — Resolved: model selection strategy in soul + daily `/usage` checks + Phase 2 cost logging.
+- [x] **Backups** — Resolved: default to creating GitHub remotes on scaffold, soul reminds to push, Phase 2 weekly check routine.
+- [x] **Shared data write safety** — Resolved: "one writer per shared folder" as hard rule, `_meta.json` for every shared dataset.
 
 ---
 
 ## Next Steps
 
-1. **Brain dump** — Get all 10-25 ideas out of Harry's head into idea files
-2. **Refine the soul** — Draft soul.md with real preferences
-3. **Scaffold `~/jarvis/`** — Create the directory structure, .gitignore, templates, journal
-4. **Promote 1-2 ideas** — Graduate the most exciting ones to workbenches
-5. **Work in the system** — Use it for a week, note what's missing
-6. **Iterate** — Adjust structure based on real usage
-7. **iMessage integration** (Phase 1.5) — Design and build mobile capture
-8. **Open TODOs** — Come back to project CLAUDE.md template and graduation process
+### Phase 1 Build Order
+
+1. **Harry's values** — Self-reflect on 3-5 personal values for the soul identity half (not a Claude task)
+2. **Brain dump** — Get all 10-25 ideas out of Harry's head into idea files (conversational)
+3. **Design project CLAUDE.md template** — Brainstorm session (flagged TODO, high priority)
+4. **Scaffold `~/jarvis/`** — Create the directory structure: ideas/, journal/, memory/, workbench/, shared/, docs/ref/, .gitignore, templates, both CLAUDE.md soul files
+5. **Write the soul** — Finalize both `~/.claude/CLAUDE.md` and `~/jarvis/CLAUDE.md` with real values, model routing table, session init rules
+6. **Promote 1-2 ideas** — Graduate the most exciting ones to workbenches
+7. **Work in the system** — Use it for a week, note what's missing. Daily memory notes will start accumulating.
+8. **Iterate** — Adjust structure, soul, and conventions based on real usage
+9. **Resolve graduation process** — Once a project actually needs to move, design the process from real experience
+
+### Phase 2 (When Triggered)
+
+10. **Orchestration** — Add oh-my-claudecode, routines, morning script
+11. **Heartbeat system** — Local LLM scheduler for routine checks and agent wake-ups
+12. **iMessage integration** — Design and build mobile capture
+13. **Rate limit guardrails** — Formalize daily budgets, pause rules, model routing enforcement
+14. **Cost logging** — Track spend over time in ~/jarvis/logs/
+15. **Pipeline formalization** — pipelines.json for complex multi-project data flows
