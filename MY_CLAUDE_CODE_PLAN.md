@@ -150,8 +150,8 @@ Intent → Plan → Decompose → Dispatch → Execute → Verify → Checkpoint
 | superpowers | Structured workflows (TDD, debugging, planning, review) | Phase 1 |
 | planning-with-files | Persistent 3-file planning with hooks | Phase 1 |
 | claude-mem | Cross-session persistent memory | Phase 2 |
-| oh-my-claudecode | Multi-agent orchestration | Phase 3 |
-| wshobson/agents | 112 specialist agents (install per-need) | Phase 3 |
+| oh-my-claudecode | Multi-agent orchestration | Phase 2 |
+| wshobson/agents | 112 specialist agents (install per-need) | Phase 2 |
 | ralph | Autonomous PRD-driven loops | Phase 4 |
 | marketingskills | 25 marketing skills (CRO, SEO, copywriting) | Phase 4 (as needed) |
 | ui-ux-pro-max-skill | Searchable design databases | Phase 4 (as needed) |
@@ -163,11 +163,9 @@ Intent → Plan → Decompose → Dispatch → Execute → Verify → Checkpoint
 - chrome-devtools MCP — browser debugging
 - repomix MCP — codebase analysis
 
-### Phase 2: Memory & Tracking (after a few days)
+### Phase 2: Memory, Orchestration & Agents (after a few days → a week)
 - claude-mem — remembers decisions, patterns, context across sessions
-- beads — git-backed task tracking with dependency graphs (`npm install -g @beads/bd`)
-
-### Phase 3: Orchestration & Agents (after a week)
+- ~~beads~~ — DROPPED (redundant with built-in TaskCreate/TaskUpdate + idea files + STATUS.md)
 - oh-my-claudecode — multi-agent coordination, magic keywords (autopilot, ultrawork), HUD, smart model routing
 - wshobson/agents — cherry-pick specific specialist agents needed
 
@@ -210,7 +208,7 @@ claude
 # Each iteration: fresh context, picks next task, implements, tests, commits
 ```
 
-### Multi-Agent Mode (Phase 3)
+### Multi-Agent Mode (Phase 2)
 
 ```
 # Inside Claude Code, use magic keywords:
